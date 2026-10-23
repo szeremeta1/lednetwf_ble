@@ -20,6 +20,7 @@
         "description": "Optionen für **{name}** konfigurieren.",
         "data": {
           "disconnect_delay": "Trennverzögerung (Sekunden)",
+          "keep_connected": "Verbunden bleiben (schnellere Reaktion; hält die Bluetooth-Verbindung, die Handy-App kann sich dann nicht verbinden)",
           "led_count": "LED-Anzahl",
           "led_type": "LED-Chip-Typ",
           "color_order": "Farbreihenfolge"
@@ -43,6 +44,7 @@
         "title": "Geräteoptionen",
         "data": {
           "disconnect_delay": "Trennverzögerung (Sekunden)",
+          "keep_connected": "Verbunden bleiben (schnellere Reaktion; hält die Bluetooth-Verbindung, die Handy-App kann sich dann nicht verbinden)",
           "led_count": "LED-Anzahl",
           "led_type": "LED-Chip-Typ",
           "color_order": "Farbreihenfolge"

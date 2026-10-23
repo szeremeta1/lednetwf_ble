@@ -17,6 +17,7 @@ from .const import (
     DOMAIN,
     CONF_PRODUCT_ID,
     CONF_DISCONNECT_DELAY,
+    CONF_KEEP_CONNECTED,
     CONF_LED_COUNT,
     CONF_SEGMENTS,
     CONF_LED_TYPE,
@@ -24,6 +25,7 @@ from .const import (
     CONF_IOTBT_PROTOCOL,
     IOTBT_PROTOCOL_AUTO,
     DEFAULT_DISCONNECT_DELAY,
+    DEFAULT_KEEP_CONNECTED,
     DEFAULT_LED_COUNT,
     DEFAULT_SEGMENTS,
     LedType,
@@ -118,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         change: BluetoothChange,
     ) -> None:
         """Handle Bluetooth advertisement updates."""
+        device.on_advertisement()
         if service_info.manufacturer_data or service_info.service_data:
             device.update_from_advertisement(
                 service_info.manufacturer_data,
@@ -138,6 +141,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Hold the BLE link open if the user asked for it (faster commands)
+    device.set_keep_connected(
+        entry.options.get(CONF_KEEP_CONNECTED, DEFAULT_KEEP_CONNECTED)
+    )
 
     return True
 
@@ -164,6 +172,9 @@ async def async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None
     # Update disconnect delay
     new_delay = entry.options.get(CONF_DISCONNECT_DELAY, DEFAULT_DISCONNECT_DELAY)
     device._disconnect_delay = new_delay
+    device.set_keep_connected(
+        entry.options.get(CONF_KEEP_CONNECTED, DEFAULT_KEEP_CONNECTED)
+    )
 
     # Apply IOTBT protocol override (Telink vs segment)
     device.set_iotbt_protocol_override(

@@ -61,10 +61,14 @@ Search for "LEDnetWF BLE" and click install.  You will also get notified of futu
 #### Basic Settings
 
 **Disconnect Delay (Timeout)**
-- **Default**: 120 seconds
-- **Range**: 0 (never disconnect) to any positive number
-- **Description**: How long to wait before disconnecting from the device when not in use. Setting to 0 means the connection will be maintained permanently, this is not recommended. Shorter timeouts may cause slower response times when controlling the device but will more quickly free up Bluetooth connections for use by other devices.
+- **Default**: 30 seconds
+- **Range**: 5 to 300 seconds
+- **Description**: How long to wait before disconnecting from the device when not in use. Shorter timeouts may cause slower response times when controlling the device but will more quickly free up Bluetooth connections for use by other devices. Ignored while **Stay connected** is on.
 - **Tip**: If you only make infrequent changes to your lights, consider trying a timeout of 20 seconds. This can help save connection slots for other Bluetooth devices while still providing reasonable responsiveness.
+
+**Stay connected**
+- **Default**: off
+- **Description**: Hold the Bluetooth connection open all the time and re-establish it in the background when it drops, so a command goes out at once instead of waiting for a connect (typically 0.2-0.6 s, several seconds when the adapter is busy with other devices). It permanently uses one connection slot, and the vendor phone app can't connect while Home Assistant holds the link. A device that stops advertising (unplugged, out of range) is not retried blindly: the integration reconnects as soon as it is heard again. Takes effect immediately, no restart needed.
 
 **Device Name**
 - **Description**: Friendly name for your device as it appears in Home Assistant. This can be changed to something more meaningful like "Living Room Strip" or "Bedroom Lights".
@@ -131,7 +135,7 @@ This integration works under **either** mode:
 
 ### Connections (and connection slots)
 
-A *connection* is established only when the integration needs to **send a command** (on/off, colour, effect, and so on). This uses one of the Bluetooth adapter/proxy's limited **connection slots**. The integration connects on demand and disconnects again after the **Disconnect Delay**, freeing the slot. Connections are never held permanently (unless you set the disconnect delay to 0, which is not recommended).
+A *connection* is established only when the integration needs to **send a command** (on/off, colour, effect, and so on). This uses one of the Bluetooth adapter/proxy's limited **connection slots**. The integration connects on demand and disconnects again after the **Disconnect Delay**, freeing the slot. Connections are only held permanently if you turn on **Stay connected**.
 
 If you are short on connection slots, the lever to pull is the **Disconnect Delay** (shorter = the slot frees sooner). **Scanning mode has no effect on connection slots.** If anything, active scanning slightly *reduces* connections, because Home Assistant can read state from advertisements instead of connecting to query it.
 

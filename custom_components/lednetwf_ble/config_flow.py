@@ -31,6 +31,7 @@ from .const import (
     DOMAIN,
     CONF_PRODUCT_ID,
     CONF_DISCONNECT_DELAY,
+    CONF_KEEP_CONNECTED,
     CONF_LED_COUNT,
     CONF_SEGMENTS,
     CONF_LED_TYPE,
@@ -39,6 +40,7 @@ from .const import (
     IOTBT_PROTOCOL_AUTO,
     IOTBT_PROTOCOL_CHOICES,
     DEFAULT_DISCONNECT_DELAY,
+    DEFAULT_KEEP_CONNECTED,
     DEFAULT_LED_COUNT,
     DEFAULT_SEGMENTS,
     LedType,
@@ -383,6 +385,10 @@ class LEDNetWFConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DISCONNECT_DELAY,
                 default=DEFAULT_DISCONNECT_DELAY,
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
+            vol.Optional(
+                CONF_KEEP_CONNECTED,
+                default=DEFAULT_KEEP_CONNECTED,
+            ): bool,
         }
 
         # Only show LED config for addressable strips
@@ -509,6 +515,9 @@ class LEDNetWFConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_DISCONNECT_DELAY: options.get(
                 CONF_DISCONNECT_DELAY, DEFAULT_DISCONNECT_DELAY
             ),
+            CONF_KEEP_CONNECTED: bool(
+                options.get(CONF_KEEP_CONNECTED, DEFAULT_KEEP_CONNECTED)
+            ),
         }
 
         # Use user-provided options first, then queried values, then defaults
@@ -598,6 +607,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_DISCONNECT_DELAY,
                 default=options.get(CONF_DISCONNECT_DELAY, DEFAULT_DISCONNECT_DELAY),
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
+            vol.Optional(
+                CONF_KEEP_CONNECTED,
+                default=options.get(CONF_KEEP_CONNECTED, DEFAULT_KEEP_CONNECTED),
+            ): bool,
         }
 
         if is_iotbt_segment:
@@ -741,6 +754,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         new_options = {
             CONF_DISCONNECT_DELAY: user_input.get(
                 CONF_DISCONNECT_DELAY, DEFAULT_DISCONNECT_DELAY
+            ),
+            CONF_KEEP_CONNECTED: bool(
+                user_input.get(CONF_KEEP_CONNECTED, DEFAULT_KEEP_CONNECTED)
             ),
         }
 

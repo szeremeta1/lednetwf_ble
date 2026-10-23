@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Callable
 
 from bleak import BleakClient
@@ -21,6 +22,10 @@ from .const import (
     NOTIFY_CHARACTERISTIC_UUID,
     DEFAULT_DISCONNECT_DELAY,
     DEFAULT_EFFECT_SPEED,
+    KEEP_CONNECTED_RETRY_MIN,
+    KEEP_CONNECTED_RETRY_MAX,
+    KEEP_CONNECTED_STABLE_SECS,
+    KEEP_CONNECTED_FRESH_ADV_SECS,
     MIN_KELVIN,
     MAX_KELVIN,
     EffectType,
@@ -82,6 +87,15 @@ class LEDNetWFDevice:
         self._disconnect_timer: asyncio.TimerHandle | None = None
         self._seq: int = 0
         self._connect_lock = asyncio.Lock()
+
+        # Keep-connected mode: hold the link open and re-establish it in the
+        # background, so a command never waits for connect + notify setup.
+        self._keep_connected: bool = False
+        self._stopping: bool = False
+        self._reconnect_handle: asyncio.TimerHandle | None = None
+        self._reconnect_task: asyncio.Task | None = None
+        self._reconnect_backoff: float = KEEP_CONNECTED_RETRY_MIN
+        self._connected_at: float | None = None
 
         # Device state
         self._is_on: bool | None = None
@@ -713,7 +727,7 @@ class LEDNetWFDevice:
                 # In normal mode, use default retries (3) for reliability
                 max_attempts = 1 if self._setup_mode else 3
 
-                self._client = await establish_connection(
+                client = await establish_connection(
                     BleakClientWithServiceCache,
                     ble_device,
                     self._name,
@@ -722,16 +736,21 @@ class LEDNetWFDevice:
                     ble_device_callback=lambda: self._ble_device,
                     max_attempts=max_attempts,
                 )
+                self._client = client
 
                 # Start notifications
-                await self._client.start_notify(
+                await client.start_notify(
                     NOTIFY_CHARACTERISTIC_UUID,
                     self._on_notification,
                 )
 
                 # Give BLE stack a moment to register the notification handler
                 await asyncio.sleep(0.1)
+                if not client.is_connected or self._client is not client:
+                    # The link dropped during setup (_on_disconnected cleared it)
+                    raise BleakError(f"{self._name} disconnected during connection setup")
                 _LOGGER.debug("Connected and notifications started for %s", self._name)
+                self._connected_at = self._hass.loop.time()
 
             except BleakError as ex:
                 _LOGGER.error("Failed to connect to %s: %s", self._name, ex)
@@ -742,14 +761,102 @@ class LEDNetWFDevice:
         return self._client
 
     def _schedule_disconnect(self) -> None:
-        """Schedule a disconnection after the delay."""
+        """Schedule a disconnection after the delay (never in keep-connected mode)."""
         if self._disconnect_timer:
             self._disconnect_timer.cancel()
+            self._disconnect_timer = None
+
+        if self._keep_connected:
+            return
 
         self._disconnect_timer = self._hass.loop.call_later(
             self._disconnect_delay,
             lambda: asyncio.create_task(self._disconnect()),
         )
+
+    @property
+    def keep_connected(self) -> bool:
+        """Return True if the BLE link is held open between commands."""
+        return self._keep_connected
+
+    def set_keep_connected(self, keep: bool) -> None:
+        """Turn keep-connected mode on or off (setup and options updates).
+
+        On: connect now in the background and reconnect whenever the link drops,
+        so commands go straight out. Off: back to connect-on-demand with the idle
+        disconnect delay.
+        """
+        keep = bool(keep) and not self._setup_mode
+        if keep == self._keep_connected:
+            return
+        self._keep_connected = keep
+        _LOGGER.debug("Keep-connected %s for %s", "on" if keep else "off", self._name)
+        if keep:
+            if self._disconnect_timer:
+                self._disconnect_timer.cancel()
+                self._disconnect_timer = None
+            self._reconnect_backoff = KEEP_CONNECTED_RETRY_MIN
+            self._start_reconnect()
+        else:
+            self._cancel_reconnect()
+            if self._client and self._client.is_connected:
+                self._schedule_disconnect()
+
+    def on_advertisement(self) -> None:
+        """Reconnect on an advertisement if keep-connected is waiting for the device."""
+        if not self._keep_connected or self._reconnect_handle is not None:
+            return  # off, or a backoff retry is already scheduled
+        self._start_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        """Retry the background connect after the current backoff, then grow it."""
+        if not self._keep_connected or self._stopping:
+            return
+        if self._reconnect_handle:
+            self._reconnect_handle.cancel()
+        delay = self._reconnect_backoff
+        self._reconnect_backoff = min(self._reconnect_backoff * 2, KEEP_CONNECTED_RETRY_MAX)
+        _LOGGER.debug("Reconnecting to %s in %.1f s", self._name, delay)
+        self._reconnect_handle = self._hass.loop.call_later(delay, self._start_reconnect)
+
+    def _start_reconnect(self) -> None:
+        """Start a background connect unless one is running or we're connected."""
+        self._reconnect_handle = None
+        if not self._keep_connected or self._stopping:
+            return
+        if self._client and self._client.is_connected:
+            return
+        if self._reconnect_task and not self._reconnect_task.done():
+            return
+        self._reconnect_task = self._hass.async_create_background_task(
+            self._async_reconnect(), f"lednetwf_ble keep-connected {self._address}"
+        )
+
+    async def _async_reconnect(self) -> None:
+        """Background connect for keep-connected mode."""
+        info = bluetooth.async_last_service_info(
+            self._hass, self._address, connectable=True
+        )
+        if info is None or time.monotonic() - info.time > KEEP_CONNECTED_FRESH_ADV_SECS:
+            # Not heard lately (unplugged, out of range). HA still lists it for minutes,
+            # but a connect attempt would hold the adapter for up to a minute and delay
+            # every other device; on_advertisement() retries as soon as it is heard.
+            _LOGGER.debug("%s not advertising; reconnecting when it does", self._name)
+            return
+        try:
+            await self._ensure_connected()
+        except Exception as ex:  # noqa: BLE001 - a background task must not die silently
+            _LOGGER.debug("Background connect to %s failed: %s", self._name, ex)
+            self._schedule_reconnect()
+
+    def _cancel_reconnect(self) -> None:
+        """Cancel a scheduled or running background connect."""
+        if self._reconnect_handle:
+            self._reconnect_handle.cancel()
+            self._reconnect_handle = None
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+        self._reconnect_task = None
 
     async def _disconnect(self) -> None:
         """Disconnect from the device."""
@@ -769,7 +876,17 @@ class LEDNetWFDevice:
     def _on_disconnected(self, client: BleakClient) -> None:
         """Handle disconnection."""
         _LOGGER.debug("Disconnected from %s", self._name)
+        if (self._client is not None and client is not self._client
+                and self._client.is_connected):
+            return  # a late callback from an older client; the current link is fine
         self._client = None
+        if not self._keep_connected or self._stopping or self._connect_lock.locked():
+            return  # mid-connect: the connect attempt handles its own failure
+        if (self._connected_at is not None
+                and self._hass.loop.time() - self._connected_at >= KEEP_CONNECTED_STABLE_SECS):
+            self._reconnect_backoff = KEEP_CONNECTED_RETRY_MIN
+        self._connected_at = None
+        self._schedule_reconnect()
 
     def _on_notification(self, sender: int, data: bytearray) -> None:
         """Handle incoming notifications."""
@@ -2726,6 +2843,11 @@ class LEDNetWFDevice:
 
     async def stop(self) -> None:
         """Stop the device and clean up."""
+        self._stopping = True
+        task = self._reconnect_task
+        self._cancel_reconnect()
+        if task is not None and not task.done():
+            await asyncio.wait({task})  # let a cancelled connect finish unwinding first
         if self._disconnect_timer:
             self._disconnect_timer.cancel()
             self._disconnect_timer = None

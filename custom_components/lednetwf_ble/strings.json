@@ -20,6 +20,7 @@
         "description": "Configure options for **{name}**. Total LEDs: {total_leds}",
         "data": {
           "disconnect_delay": "Disconnect delay (seconds)",
+          "keep_connected": "Stay connected (faster response; holds the Bluetooth link, so the phone app can't connect)",
           "led_count": "LEDs per segment",
           "segments": "Number of segments",
           "led_type": "LED chip type",
@@ -45,6 +46,7 @@
         "description": "Total LEDs: {total_leds}",
         "data": {
           "disconnect_delay": "Disconnect delay (seconds)",
+          "keep_connected": "Stay connected (faster response; holds the Bluetooth link, so the phone app can't connect)",
           "led_count": "LEDs per segment",
           "segments": "Number of segments",
           "led_type": "LED chip type",

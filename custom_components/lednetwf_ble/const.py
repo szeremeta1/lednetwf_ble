@@ -11,6 +11,7 @@ DOMAIN: Final = "lednetwf_ble"
 CONF_MODEL: Final = "model"
 CONF_PRODUCT_ID: Final = "product_id"
 CONF_DISCONNECT_DELAY: Final = "disconnect_delay"
+CONF_KEEP_CONNECTED: Final = "keep_connected"
 CONF_LED_COUNT: Final = "led_count"
 CONF_SEGMENTS: Final = "segments"
 CONF_LED_TYPE: Final = "led_type"
@@ -43,6 +44,14 @@ IOTBT_PROTOCOL_CHOICES: Final = (
 
 # Default values
 DEFAULT_DISCONNECT_DELAY: Final = 30  # seconds
+DEFAULT_KEEP_CONNECTED: Final = False
+# Keep-connected mode: background reconnect backoff (seconds), and how long a link must
+# have lasted before a drop counts as a fresh start (resets the backoff)
+KEEP_CONNECTED_RETRY_MIN: Final = 2
+KEEP_CONNECTED_RETRY_MAX: Final = 300
+KEEP_CONNECTED_STABLE_SECS: Final = 60
+# Only reconnect in the background to a device heard within this many seconds
+KEEP_CONNECTED_FRESH_ADV_SECS: Final = 10
 DEFAULT_LED_COUNT: Final = 60
 DEFAULT_SEGMENTS: Final = 1
 DEFAULT_EFFECT_SPEED: Final = 50  # 0-100

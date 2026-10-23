@@ -20,6 +20,7 @@
         "description": "Configurar opciones para **{name}**.",
         "data": {
           "disconnect_delay": "Retraso de desconexión (segundos)",
+          "keep_connected": "Mantener conectado (respuesta más rápida; mantiene la conexión Bluetooth, la app del móvil no podrá conectarse)",
           "led_count": "Cantidad de LEDs",
           "led_type": "Tipo de chip LED",
           "color_order": "Orden de colores"
@@ -43,6 +44,7 @@
         "title": "Opciones del dispositivo",
         "data": {
           "disconnect_delay": "Retraso de desconexión (segundos)",
+          "keep_connected": "Mantener conectado (respuesta más rápida; mantiene la conexión Bluetooth, la app del móvil no podrá conectarse)",
           "led_count": "Cantidad de LEDs",
           "led_type": "Tipo de chip LED",
           "color_order": "Orden de colores"
